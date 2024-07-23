@@ -3,18 +3,22 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { Neo4jService } from 'nest-neo4j';
 import { CreateBorrowDto } from './dto/create-borrow.dto';
 import { ClientKafka } from '@nestjs/microservices';
 import { DeleteBorrowDto } from './dto/delete-borrow.dto';
 import { lastValueFrom } from 'rxjs';
+import { LogsService } from '../logs/logs.service';
+import { CreateLogDto } from '../logs/dto/create-log.dto';
 
 @Injectable()
-export class BorrowService {
+export class BorrowService implements OnModuleInit {
   constructor(
     @Inject('KAFKA_SERVICE') private readonly kafkaClient: ClientKafka,
     private readonly neo4jService: Neo4jService,
+    private readonly logsService: LogsService,
   ) {}
 
   async onModuleInit() {
@@ -26,6 +30,7 @@ export class BorrowService {
     const { title, borrowerName, borrowDate, returnDate } = createBorrowDto;
     const session = this.neo4jService.getWriteSession();
     const transaction = session.beginTransaction();
+    const timestamp = new Date().toISOString();
 
     try {
       // Management servisine kitap durumu sorgulama isteği gönder
@@ -61,9 +66,31 @@ export class BorrowService {
       });
 
       await transaction.commit();
+
+      // Success log oluştur
+      const successLog: CreateLogDto = {
+        title,
+        borrowerName,
+        status: 'success',
+        message: 'Book borrowed successfully',
+        timestamp,
+      };
+      await this.logsService.createLog(successLog);
+
       return borrow;
     } catch (error) {
       await transaction.rollback();
+
+      // Error log oluştur
+      const errorLog: CreateLogDto = {
+        title,
+        borrowerName,
+        status: 'error',
+        message: error.message,
+        timestamp,
+      };
+      await this.logsService.createLog(errorLog);
+
       throw error;
     } finally {
       await session.close();
@@ -99,6 +126,7 @@ export class BorrowService {
     const { title, borrowerName } = deleteBorrowDto;
     const session = this.neo4jService.getWriteSession();
     const transaction = session.beginTransaction();
+    const timestamp = new Date().toISOString();
 
     try {
       // Borrow kaydını kontrol et
@@ -130,6 +158,16 @@ export class BorrowService {
 
       await transaction.commit();
 
+      // Success log oluştur
+      const successLog: CreateLogDto = {
+        title,
+        borrowerName,
+        status: 'success',
+        message: 'Book borrow record deleted successfully',
+        timestamp,
+      };
+      await this.logsService.createLog(successLog);
+
       // Kafka'ya mesaj gönder
       this.kafkaClient.emit('book_returned', {
         title,
@@ -137,6 +175,17 @@ export class BorrowService {
       });
     } catch (error) {
       await transaction.rollback();
+
+      // Error log oluştur
+      const errorLog: CreateLogDto = {
+        title,
+        borrowerName,
+        status: 'error',
+        message: error.message,
+        timestamp,
+      };
+      await this.logsService.createLog(errorLog);
+
       throw error;
     } finally {
       await session.close();
