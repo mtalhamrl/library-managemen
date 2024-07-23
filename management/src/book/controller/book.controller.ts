@@ -25,6 +25,10 @@ export class BookController {
   findAll() {
     return this.bookService.findAll();
   }
+  @Get(':title/status')
+  async findBookStatus(@Param('title') title: string) {
+    return this.bookService.findBookStatus(title);
+  }
 
   @Delete()
   delete(@Body() deleteBookDto: DeleteBookDto) {

@@ -1,11 +1,4 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import {
-  ClientKafka,
-  Transport,
-  Client,
-  MessagePattern,
-} from '@nestjs/microservices';
-import { Payload } from '@nestjs/microservices';
+import { Injectable } from '@nestjs/common';
 import { Neo4jService } from 'nest-neo4j';
 import { CreateBookDto } from '../dto/create-book.dto';
 import { DeleteBookDto } from '../dto/delete-book.dto';
@@ -23,6 +16,19 @@ export class BookService {
     `;
     const params = { title, status };
     await this.neo4jService.write(query, params);
+  }
+
+  async findBookStatus(title: string) {
+    const query = `
+      MATCH (book:Book {title: $title})
+      RETURN book.status AS status
+    `;
+    const params = { title };
+    const result = await this.neo4jService.read(query, params);
+    if (result.records.length === 0) {
+      throw new Error('Book not found');
+    }
+    return result.records[0].get('status');
   }
 
   async create(createBookDto: CreateBookDto) {
@@ -160,6 +166,7 @@ export class BookService {
   }
 
   async delete(deleteBookDto: DeleteBookDto) {
+    const { title } = deleteBookDto;
     const session = this.neo4jService.getWriteSession();
     const transaction = session.beginTransaction();
     try {
@@ -168,7 +175,7 @@ export class BookService {
         MATCH (book:Book {title: $title})
         RETURN book
       `;
-      const checkParam = { title: deleteBookDto.title };
+      const checkParam = { title };
       const checkResult = await transaction.run(checkBookQuery, checkParam);
 
       if (checkResult.records.length === 0) {
