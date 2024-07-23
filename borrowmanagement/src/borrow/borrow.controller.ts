@@ -1,7 +1,6 @@
 import { Controller, Get, Post, Delete, Body, Param } from '@nestjs/common';
 import { BorrowService } from './borrow.service';
 import { CreateBorrowDto } from './dto/create-borrow.dto';
-import { DeleteBorrowDto } from './dto/delete-borrow.dto';
 
 @Controller('borrows')
 export class BorrowController {
@@ -22,8 +21,8 @@ export class BorrowController {
     return this.borrowService.findOne(title);
   }
 
-  @Delete()
-  async deleteBorrow(@Body() deleteBorrowDto: DeleteBorrowDto) {
-    return this.borrowService.delete(deleteBorrowDto);
+  @Delete(':title')
+  delete(@Param('title') title: string) {
+    return this.borrowService.delete(title);
   }
 }
